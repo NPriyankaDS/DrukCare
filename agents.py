@@ -1,5 +1,5 @@
 import os
-from crewai import Agent
+from crewai import Agent, LLM
 from tools import MentalHealthTools
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
@@ -9,12 +9,11 @@ load_dotenv()
 # Instantiate the tools
 mental_health_tools = MentalHealthTools()
 
-llm = ChatGroq(
-          model="groq/llama-3.3-70b-versatile",
-          base_url="https://api.groq.com/openai/v1/",
-          api_key=os.getenv("OPENAI_API_KEY"),
+llm = LLM(
+          model="gemini/gemini-2.0-flash",
+          api_key=os.getenv("GOOGLE_API_KEY"),
           temperature=0.3,
-          max_tokens=200,
+          max_tokens=None,
           timeout=None,
           max_retries=2,
         )

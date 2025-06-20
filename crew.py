@@ -23,13 +23,9 @@ bhutan_mental_health_crew = Crew(
     ],
     process=Process.sequential, # Execute tasks in the order defined
     verbose=True,
-    planning = True,
+    output_log_file="output.txt",
     manager_llm=None # Only necessary for hierarchical process
 )
-
-# Example of how to kick off the process
-# You'd typically get 'user_query' from your application's frontend.
-# For demonstration, let's define a user query.
 
 def run_mental_health_assistant(user_input: str, current_profile_state: str = '{}', current_assessment_state: str = '{}'):
     """
@@ -55,6 +51,5 @@ if __name__ == "__main__":
    
     
     user_input = "I am feeling to not live. I do not want to live anymore."
-    result_flow = run_mental_health_assistant(user_input, 
-                                                              current_profile_state=json.dumps({'consent_given': True, 'age': 30, 'gender': 'Female', 'location': 'Thimphu'}))
-    print(f"\nFinal Result for Depression Flow:\n{result_flow}")
+    result_flow = run_mental_health_assistant(user_input)
+

@@ -6,12 +6,15 @@ crisis_detection_task = Task(
     description=dedent(
         "Analyze the user's input '{user_query}' for any signs of immediate mental health crisis "
         "(e.g., suicidal ideation, severe panic, acute distress). "
-        "If a crisis is detected, provide the Bhutanese helplines using the 'Bhutanese Helplines' tool "
-        "and respond in a deeply empathetic and supportive manner, urging them to contact the helplines. "
+        "If a crisis is detected, provide the Bhutanese helplines using the 'Bhutanese Helplines' tool ONLY"
+        "and respond in a deeply empathetic and supportive manner, urging them to contact the helplines in Bhutan. "
+        "Integrate traditional Bhutanese wisdom, practices (e.g., mindfulness, simple rituals, connection to nature), and the role of spiritual guidance in your advice, where appropriate"
         "If no crisis is detected, clearly state that and pass control to the Behavioral Agent."
+        "NOTE: Use ONLY the helplines fetched using the tool you have."
     ),
     expected_output="An empathetic message with helplines if crisis detected, or a 'no crisis' message.",
     agent=crisis_detection_agent,
+    output_file='task1.txt'
 )
 
 collect_user_profile_task = Task(
@@ -32,7 +35,8 @@ collect_user_profile_task = Task(
     expected_output="A JSON string representing the final collected user profile (e.g., '{\"age\": 30, \"gender\": \"female\", \"consent_given\": true}') "
                     "or an indication of no consent: '{\"consent_given\": false}' or skipped: '{\"status\": \"skipped_all\"}'.",
     agent=behavioral_agent,
-    context=[crisis_detection_task] # This task runs after crisis detection
+    context=[crisis_detection_task], # This task runs after crisis detection
+    output_file='task2.txt'
 )
 
 ingest_data_task = Task(
@@ -71,7 +75,7 @@ query_vector_db_task = Task(
     expected_output="A detailed list of relevant mental health information and recommendations from the knowledge base, "
                     "ensuring a helpful response even for vague initial queries.",
     agent=rag_agent,
-    context=[collect_user_profile_task], # This task runs after user profile collection
+    context=[crisis_detection_task, collect_user_profile_task], # This task runs after user profile collection
     # Update inputs to match the output of the previous task
     input_type='json', # Indicate that user_profile_data_json is expected to be a JSON string
     parameters={'user_profile_data_json': '{{ collect_user_profile_task.output }}'} # Map previous task's output
@@ -100,7 +104,8 @@ conduct_assessment_task = Task(
     agent=assessment_agent,
     context=[query_vector_db_task],
     input_type='json',
-    parameters={'rag_query_result_json': '{{ query_vector_db_task.output }}'}
+    parameters={'rag_query_result_json': '{{ query_vector_db_task.output }}'},
+    output_file='task5.txt'
 )
 
 personalize_and_recommend_task = Task(
@@ -134,13 +139,14 @@ personalize_and_recommend_task = Task(
     expected_output="A comprehensive, personalized, and empathetic mental health recommendation for the user, "
                     "tailored by profile, RAG results and assessment result (if available)",
     agent=personalized_recommendation_agent,
-    context=[collect_user_profile_task, query_vector_db_task, conduct_assessment_task], # Depends on all preceding tasks
+    context=[crisis_detection_task, collect_user_profile_task, query_vector_db_task, conduct_assessment_task], # Depends on all preceding tasks
     input_type='json',
     parameters={
         'user_profile_data_json': '{{ collect_user_profile_task.output }}',
         'retrieved_info_json': '{{ query_vector_db_task.output }}',
         'assessment_result_json': '{{ conduct_assessment_task.output }}'
-    }
+    },
+    output_file='task6.txt'
 )
 
 
