@@ -1,4 +1,5 @@
 from crewai.tools import tool
+from typing import Optional
 
 class MentalHealthTools:
     """
@@ -287,7 +288,7 @@ class MentalHealthTools:
         })
 
     @tool("Vector Database Operations")
-    def vector_db_operations(operation: str, data: str = None, query_text: str = None, user_profile: dict = None):
+    def vector_db_operations(operation: str, data: Optional[str] = None, query_text: Optional[str] = None, user_profile: Optional[dict] = None):
         """
         Performs operations on a simulated vector database:
         - Ingestion (operation='ingest', data='text to ingest')

@@ -18,25 +18,23 @@ crisis_detection_task = Task(
 )
 
 collect_user_profile_task = Task(
-    description=dedent(
-        "Initiate and manage the user profile collection process. "
-        "Your first action should be to use the 'User Profile Manager' tool with the initial '{user_query}' "
-        "and an empty `current_profile_str`. "
-        "Based on the tool's output (specifically 'next_question_for_user' and 'status'), "
-        "either ask the precise next question to the user, or finalize the profile collection. "
-        "If the tool's status is 'complete', 'skipped_all', or 'consent_denied', this task is done. "
-        "You MUST pass the 'profile' dictionary (as a JSON string) from the tool's output "
-        "as the `current_profile_str` in subsequent calls to the tool within this task's conceptual loop "
-        "(i.e., for a multi-turn interaction if this task were broken down into sub-tasks or handled by an external loop). "
-        "For this single-turn task, assume the LLM will interpret the 'next_question_for_user' "
-        "and this task will output the final profile state as a JSON string."
-        "If consent is denied or all questions are skipped, ensure the output reflects this so the next agent can proceed."
+    description=(
+        "**Engage the user in a multi-turn dialogue to collect profile information using the 'User Profile Manager' tool.** "
+        "For each turn, you MUST use the 'User Profile Manager' tool, passing the **current user input from '{user_query}'** and the `current_profile_str` to it. " # Clarified user_query usage
+        "**Crucially, after each tool call, you MUST analyze the tool's output JSON.** "
+        "If the `status` from the tool's output is 'consent_pending', 'age_pending', 'gender_pending', 'location_pending', or 'ethnicity_pending', "
+        "you MUST output the exact string: 'QUESTION_FOR_USER: ' followed by the value of `next_question_for_user` from the tool's output. "
+        "This tells the outer loop to prompt the human user with this question. "
+        "If the tool's `status` is 'complete', 'skipped_all', or 'consent_denied', output a final natural language message "
+        "summarizing the profile collection outcome (e.g., 'Profile collection completed, I have your age as 30.') "
+        "followed by a unique tag: 'PROFILE_COMPLETED', 'PROFILE_SKIPPED', or 'CONSENT_DENIED' at the very end of your output. "
+        "Ensure the output JSON from the tool is still part of the task's final output for subsequent tasks to use as context."
     ),
-    expected_output="A JSON string representing the final collected user profile (e.g., '{\"age\": 30, \"gender\": \"female\", \"consent_given\": true}') "
-                    "or an indication of no consent: '{\"consent_given\": false}' or skipped: '{\"status\": \"skipped_all\"}'.",
+    expected_output="A string starting with 'QUESTION_FOR_USER: ' if more input is needed, "
+                    "or a natural language summary ending with 'PROFILE_COMPLETED', 'PROFILE_SKIPPED', or 'CONSENT_DENIED'.",
     agent=behavioral_agent,
-    context=[crisis_detection_task], # This task runs after crisis detection
-    output_file='task2.txt'
+    context=[crisis_detection_task],
+    output_file='task2.txt' 
 )
 
 ingest_data_task = Task(
@@ -82,30 +80,29 @@ query_vector_db_task = Task(
 )
 
 conduct_assessment_task = Task(
-    description=dedent(
-        "Based on the 'identified_condition' from '{rag_query_result_json}' (which contains both recommendations and the identified condition) "
+    description=(
+        "Based on the 'identified_condition' from '{rag_query_result_json}' (which contains recommendations, identified condition, and sources) "
         "and the user's initial query '{user_query}', determine if a detailed assessment is appropriate. "
         "1. Parse the `rag_query_result_json` string to get the `identified_condition`. "
-        "2. If the `identified_condition` is 'depression' or 'anxiety' or 'substance_abuse', " # Now checking for multiple conditions
-        "   initiate the 'Administer Questionnaire' tool with the corresponding `condition_type`. "
-        "3. ** Crucially: First, ask the user for consent to take the questionnaire. If they provide 'yes', proceed. "
-        "   If they say 'no' or 'skip', or if the questionnaire is completed or skipped, respect their choice and proceed to the next stage. ** "
-        "4. If administering the questionnaire, follow the prompts from the 'Administer Questionnaire' tool. "
-        "   You will need to pass the user's response and the `current_assessment_state_str` back to the tool. "
-        "   (Note: In a true interactive multi-turn Crew, this task would loop or delegate back to the main app "
-        "   for user input. For a sequential Crew, you are simulating a continuous interaction within this task's scope.)"
-        "5. If no specific assessment is triggered (e.g., for 'general well-being' or 'stress'), the task should output "
-        "   a status indicating 'no_assessment_needed' or 'assessment_skipped_by_condition', and proceed."
-        "6. The final output of this task should be a JSON string indicating the assessment status (e.g., 'completed_phq9', 'consent_denied', 'skipped_assessment', 'no_assessment_needed') "
-        "   and relevant assessment results (e.g., total_score, interpretation) if completed."
+        "2. If the `identified_condition` is 'depression' or 'anxiety' or 'substance_abuse', "
+        "   **engage the user in a multi-turn dialogue to administer the questionnaire using the 'Administer Questionnaire' tool.** "
+        "   For each turn, you MUST use the 'Administer Questionnaire' tool, passing the **current user input from '{user_query}'** and the `current_assessment_state_str` to it. " # Clarified user_query usage
+        "   **Crucially, after each tool call, you MUST analyze the tool's output JSON.** "
+        "   If the `status` from the tool's output is 'consent_pending' or 'q_pending', you MUST output the exact string: 'QUESTION_FOR_USER: ' "
+        "   followed by the `next_question_for_user` from the tool. This tells the outer loop to prompt the human user. "
+        "3. If the tool's `status` is 'complete', 'skipped', or 'consent_denied', output a final natural language message "
+        "   summarizing the assessment outcome (e.g., 'Assessment completed, your score is X.') "
+        "   followed by a unique tag: 'ASSESSMENT_COMPLETED', 'ASSESSMENT_SKIPPED', or 'ASSESSMENT_DENIED' at the very end of your output. "
+        "4. If no specific assessment is triggered (e.g., for 'general well-being' or 'stress'), the task should output "
+        "   a natural language message followed by 'NO_ASSESSMENT_NEEDED'."
+        "Ensure the output JSON from the tool is still part of the task's final output for subsequent tasks to use as context."
     ),
-    expected_output="A JSON string containing 'assessment_status' (e.g., 'completed_phq9', 'completed_gad7', 'consent_denied', 'skipped_assessment', 'no_assessment_needed'), "
-                    "'assessment_name' (e.g., 'PHQ-9'), 'total_score' (if applicable, or null), and 'interpretation' (if applicable, or null).",
+    expected_output="A string starting with 'QUESTION_FOR_USER: ' if more input is needed, "
+                    "or a natural language summary ending with 'ASSESSMENT_COMPLETED', 'ASSESSMENT_SKIPPED', 'ASSESSMENT_DENIED', or 'NO_ASSESSMENT_NEEDED'.",
     agent=assessment_agent,
     context=[query_vector_db_task],
     input_type='json',
-    parameters={'rag_query_result_json': '{{ query_vector_db_task.output }}'},
-    output_file='task5.txt'
+    parameters={'rag_query_result_json': '{{ query_vector_db_task.output }}'}
 )
 
 personalize_and_recommend_task = Task(
@@ -116,7 +113,7 @@ personalize_and_recommend_task = Task(
         You will be provided with a {user_query} from the user describing their mental health struggle.
 
         Synthesize the user's initial query '{user_query}', the collected user profile '{user_profile_data_json}', 
-        the retrieved information '{retrieved_info_json}' from the RAG agent (which includes recommendations and identified condition), 
+        the retrieved information '{rag_query_result_json}' from the RAG agent (which includes recommendations and identified condition), 
         and the assessment results '{assessment_result_json}' from the Assessment Agent.
         1. Parse all input JSON strings into Python dictionaries. 
         2. Generate a highly personalized, empathetic, and actionable mental health recommendation. 
@@ -134,7 +131,8 @@ personalize_and_recommend_task = Task(
         10.Interconnectedness: Emphasize the importance of community, family, and the natural world in healing, reflecting the interconnectedness of all beings.
         11.Respect for Tradition: Integrate traditional Bhutanese wisdom, practices (e.g., mindfulness, simple rituals, connection to nature), and the role of spiritual guidance in your advice, where appropriate. Avoid language that might dismiss traditional beliefs about illness.
         12.User-Friendly Language: Keep the language clear, encouraging, and easy to understand for someone in distress.
-        13.Actionable Steps: Provide concrete, gentle, and practical measures the user can consider. """
+        13.Actionable Steps: Provide concrete, gentle, and practical measures the user can consider. 
+        NOTE: Provide the helplines only when necessary. """
     ),
     expected_output="A comprehensive, personalized, and empathetic mental health recommendation for the user, "
                     "tailored by profile, RAG results and assessment result (if available)",
@@ -143,7 +141,7 @@ personalize_and_recommend_task = Task(
     input_type='json',
     parameters={
         'user_profile_data_json': '{{ collect_user_profile_task.output }}',
-        'retrieved_info_json': '{{ query_vector_db_task.output }}',
+        'rag_query_result_json': '{{ query_vector_db_task.output }}',
         'assessment_result_json': '{{ conduct_assessment_task.output }}'
     },
     output_file='task6.txt'

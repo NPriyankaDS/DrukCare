@@ -10,7 +10,7 @@ load_dotenv()
 mental_health_tools = MentalHealthTools()
 
 llm = LLM(
-          model="gemini/gemini-2.0-flash",
+          model="gemini/gemini-2.5-flash",
           api_key=os.getenv("GOOGLE_API_KEY"),
           temperature=0.3,
           max_tokens=None,
@@ -35,20 +35,34 @@ crisis_detection_agent = Agent(
 
 behavioral_agent = Agent(
     role='Behavioral Profile Analyst',
-    goal='Collect user profile information (age, gender, location, ethnicity) with explicit consent.',
+    goal=(
+        "**Interact step-by-step with the user to collect their profile information (age, gender, location, ethnicity) with explicit consent.** "
+        "You MUST use the 'User Profile Manager' tool, passing the user's latest input '{user_query}' and the `current_profile_str` to it. " # Crucial change here
+        "**Crucially, after each tool call, you MUST analyze the tool's output JSON.** "
+        "If the `status` from the tool's output is 'consent_pending', 'age_pending', 'gender_pending', 'location_pending', or 'ethnicity_pending', "
+        "you MUST output the exact string: 'QUESTION_FOR_USER: ' followed by the value of `next_question_for_user` from the tool's output. "
+        "This tells the outer loop to prompt the human user with this question. "
+        "If the tool's `status` is 'complete', 'skipped_all', or 'consent_denied', output a final natural language message "
+        "summarizing the profile collection outcome (e.g., 'Profile collection completed, I have your age as 30.') "
+        "followed by a unique tag: 'PROFILE_COMPLETED', 'PROFILE_SKIPPED', or 'CONSENT_DENIED' at the very end of your output. "
+        "Ensure the output JSON from the tool is still part of the task's final output for subsequent tasks to use as context."
+    ),
     backstory=(
         "You are an AI assistant specialized in understanding user behavior and preferences. "
         "Your goal is to politely and clearly ask for user demographic information, "
         "ensuring consent is obtained. You must also provide an option to skip these questions. "
-        "You are skilled at using Natural Language Processing (NLP) to extract relevant details."
+        "You are skilled at using the 'User Profile Manager' tool to guide a rule-based "
+        "questionnaire and relay the exact questions or status messages to the user. "
+        "You are aware of prior crisis detection status and should adapt your initial greeting accordingly."
     ),
     tools=[mental_health_tools.manage_user_profile],
     verbose=True,
     allow_delegation=False,
-    llm=llm,
-    max_retry_limit=2,
-    memory=True # Added short-term conversational memory for this agent
+    memory=True,
+    max_retry_limit=2, 
+    llm=llm 
 )
+
 
 rag_agent = Agent(
     role='Knowledge Base Manager & Query Refiner', 
@@ -70,22 +84,32 @@ rag_agent = Agent(
 assessment_agent = Agent(
     role='Mental Health Assessment Specialist',
     goal=(
-        "Conditionally administer and manage appropriate mental health questionnaires (e.g., PHQ-9, GAD-7) "
-        "to gauge severity, but only with explicit consent. "
-        "You must use the 'Administer Questionnaire' tool and follow its lead for questions/consent. "
-        "Based on the 'identified_condition' from the RAG agent's output, select the correct questionnaire to offer."
+        "**Conditionally administer and manage appropriate mental health questionnaires (e.g., PHQ-9, GAD-7, DAST-10) "
+        "to gauge severity, but only with explicit consent from the user.** "
+        "You MUST use the 'Administer Questionnaire' tool, passing the user's latest input '{user_query}' and the `current_assessment_state_str` to it. " # Crucial change here
+        "**Crucially, after each tool call, you MUST analyze the tool's output JSON.** "
+        "If the `status` from the tool's output is 'consent_pending' or 'q_pending', you MUST output the exact string: 'QUESTION_FOR_USER: ' "
+        "followed by the `next_question_for_user` from the tool. This tells the outer loop to prompt the human user. "
+        "If the tool's `status` is 'complete', 'skipped', or 'consent_denied', output a final natural language message "
+        "summarizing the assessment outcome (e.g., 'Assessment completed, your score is X.') "
+        "followed by a unique tag: 'ASSESSMENT_COMPLETED', 'ASSESSMENT_SKIPPED', or 'ASSESSMENT_DENIED' at the very end of your output. "
+        "4. If no specific assessment is triggered (e.g., for 'general well-being' or 'stress'), the task should output "
+        "   a natural language message followed by 'NO_ASSESSMENT_NEEDED'."
+        "Ensure the output JSON from the tool is still part of the task's final output for subsequent tasks to use as context."
     ),
     backstory=(
         "You are an empathetic and professional AI, skilled in guiding users through sensitive "
         "mental health assessments. Your expertise lies in ensuring user comfort and privacy, "
         "while collecting crucial information to refine the understanding of their condition. "
-        "You strictly adhere to consent protocols and adapt the assessment based on initial condition identification."
+        "You strictly adhere to consent protocols and adapt the assessment based on initial condition identification. "
+        "You are aware that this might be part of a multi-turn conversation and must always ask the explicit next question from the tool."
     ),
     tools=[mental_health_tools.administer_questionnaire], # Updated tool name
     verbose=True,
     allow_delegation=False,
-    llm=llm
+    llm=llm # Explicitly assign LLM for demonstration
 )
+
 
 personalized_recommendation_agent = Agent(
     role='Personalized Recommendation Engine',

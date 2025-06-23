@@ -1,1 +1,1 @@
-{"assessment_status": "skipped_assessment", "assessment_name": "PHQ-9", "total_score": null, "interpretation": null}
+{"assessment_status": "error_initiating_assessment", "assessment_name": null, "total_score": null, "interpretation": "The mental health questionnaire could not be initiated due to an internal error with the assessment tool's consent mechanism."}
